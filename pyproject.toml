@@ -1,0 +1,55 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fin-agent"
+version = "0.1.0"
+description = "An agent for analyzing financial statements of public firms."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+  { name = "Yuhao Huo", email = "martinyuhaohuo@gmail.com" },
+]
+keywords = ["artificial-intelligence", "finance", "financial-statements", "langchain"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Financial and Insurance Industry",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Office/Business :: Financial",
+]
+dependencies = [
+  "langchain-google-genai>=4.3.2,<5",
+  "python-dotenv>=1.1,<2",
+]
+
+[project.optional-dependencies]
+notebook = [
+  "ipykernel>=6.30,<7",
+  "jupyterlab>=4.4,<5",
+]
+dev = [
+  "pytest>=8,<9",
+  "ruff>=0.12,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["agent"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/agent",
+  "/LICENSE",
+  "/README.md",
+  "/pyproject.toml",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
