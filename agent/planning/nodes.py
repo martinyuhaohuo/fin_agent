@@ -45,6 +45,7 @@ formatter_llm = ChatGoogleGenerativeAI(
     google_api_key=GOOGLE_API_KEY,
 )
 
+
 def make_formatter(schema, input_field: str, output_field: str, tag: str):
     """Build a node that converts state[input_field] (str) into a `schema` instance
     and writes it to state[output_field]. Tags the LLM call so the logger
@@ -116,6 +117,7 @@ format_idea = make_formatter(
     output_field="current_idea",
     tag="format_idea",
 )
+
 
 format_critique = make_formatter(
     schema=Critique,
