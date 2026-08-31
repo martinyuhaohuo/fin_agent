@@ -9,15 +9,15 @@ class Script(BaseModel):
 
 class ExecutionFeedback(BaseModel):
     """A feedback on why the last script results in a runtime error."""
-    issue: str = Field(description="3-5 sentences describing why the script does not work.")
-    fix_plan: str = Field(description="5-10 sentences describing how to address the issue found.")
+    error_summary: str = Field(description="3-5 sentences describing why the script does not work.")
+    fix_suggestion: str = Field(description="5-10 sentences describing how to address the issue found.")
 
 
 class StepFeedback(BaseModel):
     """An evaluation on whether the last script achieve the goal of the step."""
-    step_verdict: bool = Field(description="False if the script achieves the goal of the step, True if it does not.")
-    issue: str = Field(description="3-5 sentences describing why the script does not achieve the goal, in case it does not.")
-    fix_plan: str = Field(description="5-10 sentences describing how to address the issue found, in case the goal is not achieved.")
+    step_fulfilled: bool = Field(description="True if the script achieves the goal of the step, False if it does not.")
+    unmet_requirements: str = Field(description="3-5 sentences describing what the script fails to achieve, in case it does not.")
+    feedback: str = Field(description="5-10 sentences describing how to meet the unmet requirements, in case the goal is not achieved.")
 
 
 def _type_name(ann) -> str:

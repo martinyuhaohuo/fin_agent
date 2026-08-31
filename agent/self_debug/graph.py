@@ -17,14 +17,14 @@ graph = (
     .add_edge(START, "code_maker")
     .add_edge("code_maker", "format_script")
     .add_edge("format_script", "executor")
-    .add_edge("execution_evaluator", "format_execution_feedback")
+    .add_edge("executor", "execution_evaluator")
     .add_edge("format_execution_feedback", "code_maker")
     .add_edge("step_evaluator", "format_step_feedback")
     .add_edge("format_step_feedback", "extract_step_verdict")
     .add_conditional_edges(
-        "executor",
+        "execution_evaluator",
         execution_gate,
-        {"execution_evaluator": "execution_evaluator", "step_evaluator":"step_evaluator", END: END},
+        {"format_execution_feedback": "format_execution_feedback", "step_evaluator":"step_evaluator", END: END},
     )
     .add_conditional_edges(
         "extract_step_verdict",

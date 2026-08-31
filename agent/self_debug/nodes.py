@@ -27,7 +27,7 @@ except:
 ENGINEER_MODEL  = "gemini-3.1-flash-lite-preview"
 FORMAT_MODEL = "gemini-3.1-flash-lite-preview"
 EXECUTION_EVALUATOR_MODEL = "gemini-3.1-flash-lite-preview"
-STEP_EVALUATOR = "gemini-3.7-flash"
+STEP_EVALUATOR = "gemini-3.1-pro-preview"
 
 
 engineer = ChatGoogleGenerativeAI(
@@ -65,8 +65,8 @@ def code_maker(state: CodeState, runtime: Runtime[CodeContext]) -> CodeState:
     ctx = runtime.context
     round_n = state.get("round", 0) + 1
     critique = state.get("current_feedback")
-    execution_error = state.get("ExecutionVerdict")
-    step_error = state.get("StepVerdict")
+    execution_error = state.get("execution_failed")
+    step_error = state.get("step_failed")
 
     if critique is None:
         user = (
@@ -127,19 +127,23 @@ def executor(state: CodeState, runtime: Runtime[CodeContext]) -> CodeState:
         returncode = None
         timed_out = True
 
-    if returncode != 0 or timed_out == True:
-        ExecutionVerdict = True
-    else:
-        ExecutionVerdict = False
+    
 
-    return {"stdout": stdout, "stderr": stderr, "returncode": returncode, "timed_out": timed_out, "ExecutionVerdict": ExecutionVerdict}
+    return {"stdout": stdout, "stderr": stderr, "returncode": returncode, "timed_out": timed_out}
 
 
 def execution_evaluator(state: CodeState, runtime: Runtime[CodeContext]) -> CodeState:
     ctx = runtime.context
+    timed_out = state["timed_out"]
+    returncode = state["returncode"]
+    if returncode != 0 or timed_out == True:
+        execution_failed = True
+    else:
+        execution_failed = False
+        return {"execution_failed": execution_failed}
+
     script = state["current_script"]
     error = state["stderr"]
-    timed_out = state["timed_out"]
     if timed_out:
         user = (
             f"Task:\n{ctx.task}\n\n"
@@ -158,7 +162,7 @@ def execution_evaluator(state: CodeState, runtime: Runtime[CodeContext]) -> Code
         [SystemMessage(EXECUTION_EVALUATOR_SYSTEM), HumanMessage(user)],
         config={"tags": ["execution_evaluator"]},
     )
-    return {"raw_feedback": msg.text}
+    return {"raw_feedback": msg.text, "execution_failed": execution_failed}
 
 
 def step_evaluator(state: CodeState, runtime: Runtime[CodeContext]) -> CodeState:
@@ -222,21 +226,21 @@ format_step_feedback = make_formatter(
 
 def extract_step_verdict(state: CodeState, runtime: Runtime[CodeContext]) -> CodeState:
     step_feedback = state["current_feedback"]
-    step_verdict = step_feedback.step_verdict
-    return {"StepVerdict": step_verdict}
+    step_fulfilled = step_feedback.step_fulfilled
+    return {"step_fulfilled": step_fulfilled}
 
 
 def execution_gate(state: CodeState, runtime: Runtime[CodeContext]) -> str:
     if state["round"] >= runtime.context.num_rounds:
         return END
-    elif state["ExecutionVerdict"]:
-        return "execution_evaluator"
+    elif state["execution_failed"]:
+        return "format_execution_feedback"
     else:
         return "step_evaluator"
 
 
 def step_gate(state: CodeState, runtime: Runtime[CodeContext]) -> str:
-    if state["StepVerdict"]:
-        return "code_maker"
-    else:
+    if state["step_fulfilled"]:
         return END
+    else:
+        return "codemaker"

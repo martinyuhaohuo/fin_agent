@@ -7,8 +7,8 @@ class CodeState(TypedDict, total=False):
     raw_feedback: str
     current_feedback: Optional[ExecutionFeedback | StepFeedback]
     round: int
-    ExecutionVerdict: bool
-    StepVerdict: bool
+    execution_failed: bool
+    step_fulfilled: bool
     stdout: str
     stderr: str
     returncode: int | None
