@@ -104,8 +104,7 @@ def executor(state: CodeState, runtime: Runtime[CodeContext]) -> CodeState:
     ctx = runtime.context
     script = state["current_script"]
     step_n = ctx.step_n
-    codebase = Path("codebase")
-    codebase.mkdir(exist_ok=True)
+    codebase = Path(state["work_dir"] + "/codebase")
     script_path = codebase / f"step_{step_n}.py"
     script_path.write_text(script.code, encoding="utf-8")
     try:
@@ -127,17 +126,21 @@ def executor(state: CodeState, runtime: Runtime[CodeContext]) -> CodeState:
         returncode = None
         timed_out = True
 
-    
-
     return {"stdout": stdout, "stderr": stderr, "returncode": returncode, "timed_out": timed_out}
 
 
 def execution_evaluator(state: CodeState, runtime: Runtime[CodeContext]) -> CodeState:
     ctx = runtime.context
+    step_n = ctx.step_n
+    round = state["round"]
     timed_out = state["timed_out"]
     returncode = state["returncode"]
     if returncode != 0 or timed_out == True:
         execution_failed = True
+        codebase = Path(state["work_dir"] + "/codebase")
+        script_path = codebase / f"step_{step_n}.py"
+        failed_script_name = codebase / f"step_{step_n}_failed_{round}.py"
+        script_path.rename(failed_script_name)
     else:
         execution_failed = False
         return {"execution_failed": execution_failed}

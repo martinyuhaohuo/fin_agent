@@ -13,3 +13,4 @@ class CodeState(TypedDict, total=False):
     stderr: str
     returncode: int | None
     timed_out: bool
+    work_dir: str
