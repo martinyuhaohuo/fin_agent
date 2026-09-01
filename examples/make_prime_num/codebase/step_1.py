@@ -1,33 +1,30 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.signal import convolve
-from scipy.signal.windows import gaussian
+from scipy.ndimage import gaussian_filter1d
+from pathlib import Path
 
-# Generate synthetic data
-np.random.seed(42)
-x = np.linspace(0, 10, 100)
-signal = np.sin(x)
-noise = np.random.normal(0, 0.2, size=len(x))
-noisy_signal = signal + noise
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# Create the Gaussian smoothing window
-# Using scipy.signal.windows.gaussian instead of the deprecated scipy.signal.gaussian
-window_len = 15
-std = 3
-window = gaussian(window_len, std=std)
+def generate_noisy_signal(n_points=200):
+    x = np.linspace(0, 10, n_points)
+    signal = np.sin(x)
+    noise = np.random.normal(0, 0.2, n_points)
+    return x, signal + noise
 
-# Normalize the window so the signal amplitude remains consistent
-window /= window.sum()
+def main():
+    x, noisy_signal = generate_noisy_signal()
+    smoothed_signal = gaussian_filter1d(noisy_signal, sigma=3)
+    output_path = DATA_DIR / "smoothed_signal.csv"
+    np.savetxt(output_path, np.column_stack((x, noisy_signal, smoothed_signal)), 
+               delimiter=",", header="x,noisy,smoothed", comments="")
+    print(f"Data saved to {output_path}")
+    plt.figure(figsize=(10, 5))
+    plt.plot(x, noisy_signal, label='Noisy Signal', alpha=0.5)
+    plt.plot(x, smoothed_signal, label='Smoothed Signal', color='red', linewidth=2)
+    plt.legend()
+    plt.title("Gaussian Smoothing of 1D Signal")
+    plt.show()
 
-# Apply convolution
-smoothed_signal = convolve(noisy_signal, window, mode='same')
-
-# Visualization
-plt.figure(figsize=(10, 6))
-plt.plot(x, noisy_signal, label='Noisy Signal', color='lightgray', marker='o', linestyle='None')
-plt.plot(x, signal, label='Original Signal', color='green', linestyle='--')
-plt.plot(x, smoothed_signal, label='Smoothed Signal', color='red', linewidth=2)
-plt.legend()
-plt.title('Gaussian Smoothing of a Noisy Signal')
-plt.grid(True, alpha=0.3)
-plt.show()
+if __name__ == "__main__":
+    main()

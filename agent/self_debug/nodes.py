@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+import json
 from pathlib import Path
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -12,6 +13,7 @@ from langgraph.graph import StateGraph, START, END
 from .state import CodeState
 from .schemas import Script, ExecutionFeedback, StepFeedback
 from .context import CodeContext
+from .tools import snapshot_files
 
 from .prompts import ENGINEER_SYSTEM, EXECUTION_EVALUATOR_SYSTEM, STEP_EVALUATOR_SYSTEM
 
@@ -71,6 +73,7 @@ def code_maker(state: CodeState, runtime: Runtime[CodeContext]) -> CodeState:
     if critique is None:
         user = (
             f"Task:\n{ctx.task}\n\n"
+            f"Constraints:\n{ctx.constraints}\n\n"
             f"Propose a single Python script with explanation."
         )
     else:
@@ -78,6 +81,7 @@ def code_maker(state: CodeState, runtime: Runtime[CodeContext]) -> CodeState:
             prev = state["current_script"]
             user = (
                 f"Task:\n{ctx.task}\n\n"
+                f"Constraints:\n{ctx.constraints}\n\n"
                 f"Your previous script:\n{prev.model_dump_json(indent=2)}\n\n"
                 f"execution_evaluator found that your code results in the execution error\n\n"
                 f"execution_evaluator's feedback:\n{critique.model_dump_json(indent=2)}\n\n"
@@ -87,6 +91,7 @@ def code_maker(state: CodeState, runtime: Runtime[CodeContext]) -> CodeState:
             prev = state["current_script"]
             user = (
                 f"Task:\n{ctx.task}\n\n"
+                f"Constraints:\n{ctx.constraints}\n\n"
                 f"Your previous script:\n{prev.model_dump_json(indent=2)}\n\n"
                 f"step_evaluator found that your code does not achieve the goal of this step\n\n"
                 f"step_evaluator's feedback:\n{critique.model_dump_json(indent=2)}\n\n"
@@ -104,9 +109,15 @@ def executor(state: CodeState, runtime: Runtime[CodeContext]) -> CodeState:
     ctx = runtime.context
     script = state["current_script"]
     step_n = ctx.step_n
-    codebase = Path(state["work_dir"] + "/codebase")
+    work_dir = Path(state["work_dir"])
+
+    codebase = work_dir / "codebase"
     script_path = codebase / f"step_{step_n}.py"
     script_path.write_text(script.code, encoding="utf-8")
+    
+    data_dir = work_dir / "data"
+    before = snapshot_files(data_dir)
+
     try:
         result = subprocess.run(
             [sys.executable, str(script_path)],
@@ -125,6 +136,15 @@ def executor(state: CodeState, runtime: Runtime[CodeContext]) -> CodeState:
         stderr = e.stderr or ""
         returncode = None
         timed_out = True
+
+    after = snapshot_files(data_dir)
+    created_files = sorted(after - before)
+    manifest = {
+        "step": step_n,
+        "created_files": created_files,
+    }
+    manifest_path = work_dir / "logs" / f"step_{step_n}_data_manifest.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8",)
 
     return {"stdout": stdout, "stderr": stderr, "returncode": returncode, "timed_out": timed_out}
 
@@ -150,6 +170,7 @@ def execution_evaluator(state: CodeState, runtime: Runtime[CodeContext]) -> Code
     if timed_out:
         user = (
             f"Task:\n{ctx.task}\n\n"
+            f"Constraints:\n{ctx.constraints}\n\n"
             f"Script under review:\n{script.model_dump_json(indent=2)}\n\n"
             f"Execution time exceeds then pre-defined limit of {ctx.time_out}seconds\n\n"
             f"Find the issue and suggest solution."
@@ -157,6 +178,7 @@ def execution_evaluator(state: CodeState, runtime: Runtime[CodeContext]) -> Code
     else:
         user = (
             f"Task:\n{ctx.task}\n\n"
+            f"Constraints:\n{ctx.constraints}\n\n"
             f"Script under review:\n{script.model_dump_json(indent=2)}\n\n"
             f"Execution error message:\n{error}\n\n"
             f"Find the issue and suggest solution."
@@ -174,6 +196,7 @@ def step_evaluator(state: CodeState, runtime: Runtime[CodeContext]) -> CodeState
     output = state["stdout"]
     user = (
         f"Task:\n{ctx.task}\n\n"
+        f"Constraints:\n{ctx.constraints}\n\n"
         f"Script under review:\n{script.model_dump_json(indent=2)}\n\n"
         f"The output of the script:\n{output}\n\n"
         f"The script is executed successfully, you need to check whether the script achieves the goal of the step."
