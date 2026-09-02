@@ -1,7 +1,7 @@
 from langgraph.graph import StateGraph, START, END
 from .state import CodeState
 from .context import CodeContext
-from .nodes import code_maker, executor, execution_evaluator, step_evaluator, format_script, format_execution_feedback, format_step_feedback, extract_step_verdict, execution_gate, step_gate
+from .nodes import code_maker, executor, execution_evaluator, step_evaluator, format_script, format_execution_feedback, format_step_feedback, extract_step_verdict, execution_gate, step_gate, error_history
 
 
 graph = (
@@ -14,11 +14,13 @@ graph = (
     .add_node("step_evaluator", step_evaluator)
     .add_node("format_step_feedback", format_step_feedback)
     .add_node("extract_step_verdict", extract_step_verdict)
+    .add_node("error_history", error_history)
     .add_edge(START, "code_maker")
     .add_edge("code_maker", "format_script")
     .add_edge("format_script", "executor")
     .add_edge("executor", "execution_evaluator")
-    .add_edge("format_execution_feedback", "code_maker")
+    .add_edge("format_execution_feedback", "error_history")
+    .add_edge("error_history", "code_maker")
     .add_edge("step_evaluator", "format_step_feedback")
     .add_edge("format_step_feedback", "extract_step_verdict")
     .add_conditional_edges(
@@ -29,7 +31,7 @@ graph = (
     .add_conditional_edges(
         "extract_step_verdict",
         step_gate,
-        {"code_maker": "code_maker", END: END},
+        {"error_history": "error_history", END: END},
     )
     .compile()
 )

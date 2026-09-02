@@ -23,3 +23,21 @@ def snapshot_files(directory: Path) -> set[str]:
             file_set.add(str(path.relative_to(directory)))
     return file_set
 
+
+def print_error_history(history: list[dict]) -> str:
+    sections = []
+    for record in history:
+        if record["mode"] == "code_error":
+            section = (
+                f"Round {record['round']} — code error\n"
+                f"Error summary:\n{record['error_summary']}\n"
+                f"Suggested fix:\n{record['fix_suggestion']}"
+            )
+        elif record["mode"] == "goal_miss":
+            section = (
+                f"Round {record['round']} — goal miss\n"
+                f"Unmet requirements:\n{record['unmet_requirements']}\n"
+                f"Reviewer feedback:\n{record['feedback']}"
+            )
+        sections.append(section)
+    return "\n\n".join(sections)

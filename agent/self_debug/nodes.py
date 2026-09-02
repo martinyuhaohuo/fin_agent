@@ -13,7 +13,7 @@ from langgraph.graph import StateGraph, START, END
 from .state import CodeState
 from .schemas import Script, ExecutionFeedback, StepFeedback
 from .context import CodeContext
-from .tools import snapshot_files
+from .tools import snapshot_files, print_error_history
 
 from .prompts import ENGINEER_SYSTEM, EXECUTION_EVALUATOR_SYSTEM, STEP_EVALUATOR_SYSTEM
 
@@ -69,32 +69,46 @@ def code_maker(state: CodeState, runtime: Runtime[CodeContext]) -> CodeState:
     critique = state.get("current_feedback")
     execution_error = state.get("execution_failed")
     step_pass = state.get("step_fulfilled")
+    error_history = state.get("error_history", [])
 
-    if critique is None:
+    base_prompt = (
+        f"Task:\n{ctx.task}\n\n"
+        f"Constraints:\n{ctx.constraints}\n\n"
+    )
+
+    if not error_history:
         user = (
-            f"Task:\n{ctx.task}\n\n"
-            f"Constraints:\n{ctx.constraints}\n\n"
+            base_prompt +
             f"Propose a single Python script with explanation."
         )
+        
     else:
+        prev = state["current_script"]
+        base_prompt = (
+            base_prompt + f"Your previous script:\n{prev.model_dump_json(indent=2)}\n\n"
+            )
+        
+        if len(error_history) >= 2:
+            previous_errors = print_error_history(error_history[:-1])
+            previous_errors = "Earlier failure history:\n" + previous_errors + "\n\n"
+        else:
+            previous_errors = ""
+
         if execution_error is True:
-            prev = state["current_script"]
             user = (
-                f"Task:\n{ctx.task}\n\n"
-                f"Constraints:\n{ctx.constraints}\n\n"
-                f"Your previous script:\n{prev.model_dump_json(indent=2)}\n\n"
-                f"execution_evaluator found that your code results in the execution error\n\n"
-                f"execution_evaluator's feedback:\n{critique.model_dump_json(indent=2)}\n\n"
+                base_prompt + 
+                f"execution_evaluator found that your code results in the execution error\n\n" +
+                f"execution_evaluator's feedback:\n{critique.model_dump_json(indent=2)}\n\n" +
+                previous_errors +
                 f"Revise. Address every fix listed. Return one revised idea."
             )
         elif step_pass is False:
             prev = state["current_script"]
             user = (
-                f"Task:\n{ctx.task}\n\n"
-                f"Constraints:\n{ctx.constraints}\n\n"
-                f"Your previous script:\n{prev.model_dump_json(indent=2)}\n\n"
-                f"step_evaluator found that your code does not achieve the goal of this step\n\n"
-                f"step_evaluator's feedback:\n{critique.model_dump_json(indent=2)}\n\n"
+                base_prompt + 
+                f"step_evaluator found that your code does not achieve the goal of this step\n\n" +
+                f"step_evaluator's feedback:\n{critique.model_dump_json(indent=2)}\n\n" +
+                previous_errors +
                 f"Revise. Address every fix listed. Return one revised idea."
             )
 
@@ -250,9 +264,35 @@ format_step_feedback = make_formatter(
 )
 
 
+def error_history(state: CodeState, runtime: Runtime[CodeContext]) -> CodeState:
+    current_feedback = state["current_feedback"]
+    if isinstance(current_feedback, ExecutionFeedback):
+        record = {
+            "round": state["round"],
+            "mode": "code_error",
+            "error_summary": current_feedback.error_summary,
+            "fix_suggestion": current_feedback.fix_suggestion,
+        }
+    elif isinstance(current_feedback, StepFeedback):
+        record = {
+            "round": state["round"],
+            "mode": "goal_miss",
+            "unmet_requirements": current_feedback.unmet_requirements,
+            "feedback": current_feedback.feedback,
+        }
+    return {"error_history": [record]}
+
+
 def extract_step_verdict(state: CodeState, runtime: Runtime[CodeContext]) -> CodeState:
     step_feedback = state["current_feedback"]
+    round = state["round"]
+    step_n = runtime.context.step_n
     step_fulfilled = step_feedback.step_fulfilled
+    if step_fulfilled is False: 
+        codebase = Path(state["work_dir"] + "/codebase")
+        script_path = codebase / f"step_{step_n}.py"
+        failed_script_name = codebase / f"step_{step_n}_failed_{round}.py"
+        script_path.rename(failed_script_name)
     return {"step_fulfilled": step_fulfilled}
 
 
@@ -268,5 +308,7 @@ def execution_gate(state: CodeState, runtime: Runtime[CodeContext]) -> str:
 def step_gate(state: CodeState, runtime: Runtime[CodeContext]) -> str:
     if state["step_fulfilled"]:
         return END
+    elif state["round"] >= runtime.context.num_rounds:
+                return END
     else:
-        return "code_maker"
+        return "error_history"
