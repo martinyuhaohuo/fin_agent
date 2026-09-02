@@ -68,7 +68,7 @@ def code_maker(state: CodeState, runtime: Runtime[CodeContext]) -> CodeState:
     round_n = state.get("round", 0) + 1
     critique = state.get("current_feedback")
     execution_error = state.get("execution_failed")
-    step_error = state.get("step_failed")
+    step_pass = state.get("step_fulfilled")
 
     if critique is None:
         user = (
@@ -77,7 +77,7 @@ def code_maker(state: CodeState, runtime: Runtime[CodeContext]) -> CodeState:
             f"Propose a single Python script with explanation."
         )
     else:
-        if execution_error:
+        if execution_error is True:
             prev = state["current_script"]
             user = (
                 f"Task:\n{ctx.task}\n\n"
@@ -87,7 +87,7 @@ def code_maker(state: CodeState, runtime: Runtime[CodeContext]) -> CodeState:
                 f"execution_evaluator's feedback:\n{critique.model_dump_json(indent=2)}\n\n"
                 f"Revise. Address every fix listed. Return one revised idea."
             )
-        if step_error:
+        elif step_pass is False:
             prev = state["current_script"]
             user = (
                 f"Task:\n{ctx.task}\n\n"
@@ -269,4 +269,4 @@ def step_gate(state: CodeState, runtime: Runtime[CodeContext]) -> str:
     if state["step_fulfilled"]:
         return END
     else:
-        return "codemaker"
+        return "code_maker"
